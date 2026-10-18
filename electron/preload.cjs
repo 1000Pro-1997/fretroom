@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('fretroom', {
   recognizeScore: (name, bytes) => ipcRenderer.invoke('fretroom:recognize-score', name, bytes),
   locateAudiveris: () => ipcRenderer.invoke('fretroom:locate-audiveris'),
   openAudiverisDownload: () => ipcRenderer.invoke('fretroom:open-audiveris-download'),
+  onUpdateStatus: (callback) => { ipcRenderer.on('fretroom:update-status', (_event, data) => callback(data)); },
   onOmrProgress: (callback) => { ipcRenderer.on('fretroom:omr-progress', (_event, data) => callback(data)); },
   youtubeAudio: (url) => ipcRenderer.invoke('fretroom:youtube-audio', url),
   saveTranscription: (id, title, xml) => ipcRenderer.invoke('fretroom:save-transcription', id, title, xml),

@@ -931,6 +931,11 @@ function youtubeProgress(phase, percent) {
   if (youtubeActive) showBusy(`${youtubePhases[phase] || '처리하는 중'}${percent > 0 && percent < 1 ? ` ${Math.round(percent * 100)}%` : '...'}`);
 }
 bridge?.onYoutubeProgress?.(({ phase, percent }) => youtubeProgress(phase, percent));
+bridge?.onUpdateStatus?.(({ state, version, fraction, message }) => {
+  if (state === 'downloading') showToast(`새 버전 ${version}을 받는 중입니다${fraction ? ` (${Math.round(fraction * 100)}%)` : ''}…`);
+  else if (state === 'ready') showToast(`앱을 닫으면 ${version}으로 업데이트되고, 다음에 켤 때 새 버전으로 열립니다.`);
+  else if (state === 'error') showToast(`업데이트를 받지 못했습니다: ${message}`);
+});
 // YouTube link → audio (yt-dlp in the main process) → notes (Basic Pitch) → MusicXML → guitar tab.
 async function transcribeYoutube(url) {
   if (!bridge?.youtubeAudio) { showToast('유튜브 변환은 데스크톱 앱에서만 할 수 있습니다.'); return; }

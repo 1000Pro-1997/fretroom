@@ -1,10 +1,34 @@
 # fretroom
 
-Guitar Pro 악보를 열어 기타 연습하는 Windows 데스크톱 앱입니다.
+Guitar Pro 악보를 열어 기타 연습하는 Windows·macOS 데스크톱 앱입니다.
+
+## 다운로드
+
+**[⬇ fretroom.exe 다운로드 (Windows)](https://github.com/1000Pro-1997/fretroom/releases/latest/download/fretroom.exe)** · **[⬇ macOS용 DMG 선택 (Apple Silicon / Intel)](https://github.com/1000Pro-1997/fretroom/releases/latest)** · [모든 릴리스](https://github.com/1000Pro-1997/fretroom/releases)
+
+설치 없이 받은 EXE를 더블클릭하면 실행됩니다. 다른 폴더로 EXE 파일 하나만 복사해도 실행할 수 있습니다. 서명되지 않은 앱이라 처음 실행할 때 Windows SmartScreen이 막으면 **추가 정보 → 실행**을 누르세요.
+
+Windows 휴대용 앱은 켤 때 GitHub의 새 정식 릴리스를 확인합니다. 새 버전이 있으면 백그라운드에서 EXE를 받아 파일 크기와 SHA-256을 확인하고, **지금 다시 시작 / 나중에** 중 고를 수 있습니다. 나중에를 고르면 앱을 닫을 때 교체되고 다음 실행부터 적용됩니다. 인터넷이 끊긴 동안에는 기존 버전으로 계속 사용할 수 있습니다. EXE가 있는 폴더에 쓰기 권한이 있어야 자동으로 교체할 수 있습니다.
+
+### 터미널 한 줄 설치
+
+**Windows** (PowerShell): 바탕화면에 받은 뒤 바로 실행합니다.
+
+```powershell
+$ProgressPreference='SilentlyContinue'; $f="$([Environment]::GetFolderPath('Desktop'))\fretroom.exe"; iwr https://github.com/1000Pro-1997/fretroom/releases/latest/download/fretroom.exe -OutFile $f; & $f
+```
+
+**macOS** (터미널): Apple Silicon·Intel에 맞는 DMG를 다운로드 폴더에 받고 엽니다.
+
+```sh
+arch=$(uname -m); [ "$arch" = x86_64 ] && arch=x64; curl -fL "https://github.com/1000Pro-1997/fretroom/releases/download/v1.0.1/fretroom-1.0.1-mac-$arch.dmg" -o "$HOME/Downloads/fretroom.dmg" && open "$HOME/Downloads/fretroom.dmg"
+```
+
+DMG를 열어 앱을 응용 프로그램 폴더로 옮기세요. macOS 앱은 서명·공증되지 않아 첫 실행에 **설정 → 개인정보 보호 및 보안 → 그래도 열기**가 필요할 수 있습니다. 악보 보기·재생·기타 타브 편곡·튜너와 유튜브 소리 인식은 Mac에서도 사용합니다. PDF·이미지 타브 변환에는 [Audiveris](https://github.com/Audiveris/audiveris/releases)를 따로 설치해야 합니다. Mac에서는 새 버전을 알려 주고 DMG 다운로드 링크를 열지만, 앱 자동 교체는 Windows 휴대용 EXE만 지원합니다.
 
 ## 바로 실행
 
-`release\fretroom.exe`를 더블클릭하세요. 실행 중 서버나 터미널 창이 필요하지 않습니다. 다른 폴더로 EXE 파일 하나만 복사해도 실행할 수 있습니다. `바로열기.bat`도 같은 EXE를 실행하며, EXE가 없다면 Node.js로 첫 빌드를 시도합니다.
+이 저장소를 받아 빌드했다면 `release\fretroom.exe`를 더블클릭하세요. 실행 중 서버나 터미널 창이 필요하지 않습니다. `바로열기.bat`도 같은 EXE를 실행하며, EXE가 없다면 Node.js로 첫 빌드를 시도합니다.
 
 왼쪽 **악보** 탭은 악보를 폴더별로 묶어 보여 줍니다. 선택한 폴더와 **파일 열기**로 연 악보의 폴더가 각각 폴더 이름으로 표시되고, 이름을 누르면 접거나 펼칩니다(접힌 상태는 저장되며, 검색 중에는 모두 펼쳐 보입니다). 홈 화면에는 **최근 재생한 악보**가 최대 10개 표시됩니다. 악보를 열기만 하면 등록되지 않고, 재생을 시작해야 목록에 올라갑니다. 음표 아이콘을 누르면 그 악보를 열고 **튜너**로 전환합니다. 악보를 **우클릭**하면 즐겨찾기·파일 이름 바꾸기·목록에서 제거 메뉴가 나타납니다. 즐겨찾기는 목록 맨 위에 모이고, 제거는 원본 파일을 삭제하지 않고 목록에서만 숨깁니다. 홈 화면의 **즐겨찾기 · 목록 관리**에서 즐겨찾기를 해제하거나 숨긴 악보를 복구할 수 있습니다. 파일을 창에 드래그해 열 수도 있습니다. 탐색기에서 `.gp5`를 더블클릭해 앱과 자동 연결하는 기능은 없습니다.
 

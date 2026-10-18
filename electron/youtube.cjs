@@ -6,7 +6,9 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 
-const ytDlpUrl = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe';
+const ytDlpUrl = process.platform === 'darwin'
+  ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos'
+  : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe';
 const maxSeconds = 15 * 60;
 
 const binFolder = () => path.join(app.getPath('userData'), 'bin');
@@ -27,9 +29,12 @@ function videoId(url) {
 }
 
 async function ensureYtDlp(progress) {
-  const executable = path.join(binFolder(), 'yt-dlp.exe');
+  const executable = path.join(binFolder(), process.platform === 'darwin' ? 'yt-dlp_macos' : 'yt-dlp.exe');
   try {
-    if ((await fs.stat(executable)).size > 1e6) return executable;
+    if ((await fs.stat(executable)).size > 1e6) {
+      if (process.platform === 'darwin') await fs.chmod(executable, 0o755);
+      return executable;
+    }
   } catch {}
   progress('tool', 0);
   await fs.mkdir(binFolder(), { recursive: true });
@@ -48,6 +53,7 @@ async function ensureYtDlp(progress) {
   }
   const partial = `${executable}.download`;
   await fs.writeFile(partial, Buffer.concat(chunks));
+  if (process.platform === 'darwin') await fs.chmod(partial, 0o755);
   await fs.rename(partial, executable);
   return executable;
 }

@@ -1,6 +1,6 @@
 {
   "name": "gp-practice-viewer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -23,6 +23,7 @@
       "electron/**/*",
       "patches/**/*",
       "build/icon.ico",
+      "build/icon.icns",
       "README.md",
       "package.json"
     ],
@@ -30,6 +31,16 @@
       "target": "portable",
       "icon": "build/icon.ico",
       "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.music",
+      "identity": null,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "fretroom uses the microphone for guitar tuning."
+      },
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
     }
   },
   "devDependencies": {

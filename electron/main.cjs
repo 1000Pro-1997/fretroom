@@ -5,6 +5,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const omr = require('./omr.cjs');
 const youtube = require('./youtube.cjs');
+const updater = require('./updater.cjs');
 
 const origin = 'fretroom://app';
 const dist = path.join(__dirname, '..', 'dist');
@@ -325,10 +326,10 @@ function registerLibraryHandlers() {
     trustedFrame(event);
     const owner = BrowserWindow.fromWebContents(event.sender);
     const { canceled, filePaths } = await dialog.showOpenDialog(owner, {
-      title: 'Audiveris.exe 위치 선택',
-      defaultPath: process.env.ProgramFiles || undefined,
+      title: process.platform === 'darwin' ? 'Audiveris.app 위치 선택' : 'Audiveris.exe 위치 선택',
+      defaultPath: process.platform === 'darwin' ? '/Applications' : process.env.ProgramFiles || undefined,
       properties: ['openFile'],
-      filters: [{ name: 'Audiveris', extensions: ['exe'] }],
+      ...(process.platform === 'darwin' ? {} : { filters: [{ name: 'Audiveris', extensions: ['exe'] }] }),
     });
     if (canceled || !filePaths.length) return null;
     return omr.rememberExecutable(path.resolve(filePaths[0]));
@@ -413,6 +414,9 @@ if (!app.requestSingleInstanceLock()) {
       if (!url.startsWith(`${origin}/`)) event.preventDefault();
     });
     window.loadURL(`${origin}/`);
+    window.webContents.once('did-finish-load', () => updater.checkForUpdates(window, (status) => {
+      if (!window.isDestroyed()) window.webContents.send('fretroom:update-status', status);
+    }));
   });
 
   app.on('window-all-closed', () => app.quit());

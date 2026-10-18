@@ -1,8 +1,9 @@
 // Optical music recognition of PDF/image scores through Audiveris.
-// The official Windows release is extracted into userData on first use.
+// Windows extracts its installer on first use; macOS uses a separately installed Audiveris.app.
 const { app, net } = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const { createHash, randomUUID } = require('node:crypto');
+const { constants: fsConstants } = require('node:fs');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
@@ -30,24 +31,35 @@ function isRecognizedName(name) {
 
 async function isFile(filename) {
   try {
-    return (await fs.stat(filename)).isFile();
+    const file = await fs.stat(filename);
+    if (!file.isFile()) return false;
+    if (process.platform === 'darwin') await fs.access(filename, fsConstants.X_OK);
+    return true;
   } catch {
     return false;
   }
 }
 
-function validateExecutable(filename) {
-  if (typeof filename !== 'string' || !path.isAbsolute(filename) ||
-      path.extname(filename).toLowerCase() !== '.exe' || !/audiveris/i.test(path.basename(filename))) {
+function executablePath(filename) {
+  if (typeof filename !== 'string' || !path.isAbsolute(filename)) {
+    throw new Error('Audiveris 실행 파일을 선택해 주세요.');
+  }
+  if (process.platform === 'darwin') {
+    const executable = filename.endsWith('.app') ? path.join(filename, 'Contents', 'MacOS', 'Audiveris') : filename;
+    if (!/^audiveris$/i.test(path.basename(executable))) throw new Error('Audiveris.app을 선택해 주세요.');
+    return executable;
+  }
+  if (path.extname(filename).toLowerCase() !== '.exe' || !/audiveris/i.test(path.basename(filename))) {
     throw new Error('Audiveris.exe 파일을 선택해 주세요.');
   }
+  return filename;
 }
 
 async function savedExecutable() {
   try {
     const saved = JSON.parse(await fs.readFile(preferenceFile(), 'utf8')).path;
-    validateExecutable(saved);
-    return (await isFile(saved)) ? saved : null;
+    const executable = executablePath(saved);
+    return (await isFile(executable)) ? executable : null;
   } catch {
     return null;
   }
@@ -56,6 +68,17 @@ async function savedExecutable() {
 async function findAudiveris() {
   const saved = await savedExecutable();
   if (saved) return saved;
+  if (process.platform === 'darwin') {
+    const candidates = [
+      '/Applications/Audiveris.app/Contents/MacOS/Audiveris',
+      path.join(os.homedir(), 'Applications', 'Audiveris.app', 'Contents', 'MacOS', 'Audiveris'),
+      '/opt/homebrew/bin/audiveris',
+      '/usr/local/bin/audiveris',
+      ...(process.env.PATH || '').split(path.delimiter).filter(Boolean).map((folder) => path.join(folder, 'audiveris')),
+    ];
+    for (const candidate of candidates) if (await isFile(candidate)) return candidate;
+    return null;
+  }
   if (await isFile(installedExecutable())) return installedExecutable();
   const env = process.env;
   const candidates = [
@@ -70,11 +93,11 @@ async function findAudiveris() {
 }
 
 async function rememberExecutable(filename) {
-  validateExecutable(filename);
-  if (!(await isFile(filename))) throw new Error('선택한 Audiveris.exe 파일을 찾을 수 없습니다.');
+  const executable = executablePath(filename);
+  if (!(await isFile(executable))) throw new Error('선택한 Audiveris 실행 파일을 찾을 수 없습니다.');
   await fs.mkdir(app.getPath('userData'), { recursive: true });
-  await fs.writeFile(preferenceFile(), JSON.stringify({ path: filename }), 'utf8');
-  return filename;
+  await fs.writeFile(preferenceFile(), JSON.stringify({ path: executable }), 'utf8');
+  return executable;
 }
 async function downloadInstaller(destination, progress) {
   const response = await net.fetch(installerUrl);
@@ -114,6 +137,9 @@ function extractInstaller(installer, folder) {
 
 async function ensureAudiveris(progress = () => {}) {
   const existing = await findAudiveris();
+  if (process.platform === 'darwin' && !existing) {
+    throw new Error('macOS에서는 Audiveris 자동 설치를 지원하지 않습니다. Audiveris.app을 설치하거나 설치 위치를 선택해 주세요.');
+  }
   if (existing) return existing;
   listeners.add(progress);
   if (!installation) {
@@ -202,7 +228,10 @@ async function recognize(bytes, name, progress = () => {}) {
   if (cached) return cached;
   let executable;
   try { executable = await ensureAudiveris(progress); }
-  catch (error) { throw new Error(`${missingCode}: 자동 설치 실패: ${error.message}`); }
+  catch (error) {
+    const reason = process.platform === 'darwin' ? 'Audiveris를 찾지 못했습니다' : '자동 설치 실패';
+    throw new Error(`${missingCode}: ${reason}: ${error.message}`);
+  }
   progress('recognize', 0);
   const work = await fs.mkdtemp(path.join(os.tmpdir(), 'fretroom-omr-'));
   try {
