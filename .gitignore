@@ -1,0 +1,5 @@
+node_modules/
+dist/
+release/
+public/soundfont/FluidR3_GM.sf2
+public/soundfont/*.download

@@ -1,0 +1,48 @@
+{
+  "name": "gp-practice-viewer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "desktop": "npm run build && electron .",
+    "package:win": "npm run build && node scripts/package-win.cjs",
+    "postinstall": "patch-package && node scripts/fetch-soundfont.cjs"
+  },
+  "build": {
+    "appId": "kr.fretroom.viewer",
+    "productName": "fretroom",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "patches/**/*",
+      "build/icon.ico",
+      "README.md",
+      "package.json"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    }
+  },
+  "devDependencies": {
+    "@coderline/alphatab": "1.8.4",
+    "@coderline/alphatab-vite": "1.8.4",
+    "@spotify/basic-pitch": "^1.0.1",
+    "@tensorflow/tfjs": "^3.21.0",
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
+    "patch-package": "^8.0.1",
+    "vite": "^7.0.0"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^5.7.284"
+  }
+}

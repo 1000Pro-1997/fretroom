@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#142423" />
+  <title>fretroom — 기타 연습 악보</title>
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand-row"><button id="home-button" class="brand" type="button" aria-label="홈으로"><span class="brand-mark">♮</span><span><strong>fretroom</strong><small>PRACTICE SPACE</small></span></button><button id="sidebar-close" class="side-icon" type="button" aria-label="사이드바 닫기">‹</button></div>
+    <div class="sidebar-tabs" role="tablist" aria-label="사이드바 메뉴">
+      <button id="tab-library" role="tab" aria-controls="library-pane" aria-selected="true" type="button">악보</button>
+      <button id="tab-settings" role="tab" aria-controls="settings-panel" aria-selected="false" type="button" tabindex="-1">연습 설정</button>
+      <button id="tab-tuner" role="tab" aria-controls="tuner-panel" aria-selected="false" type="button" tabindex="-1">튜너</button>
+    </div>
+    <div id="library-pane" class="sidebar-pane library-pane" role="tabpanel" aria-labelledby="tab-library">
+    <div class="library-head"><div class="section-label">MY SCORES</div><div class="library-actions"><button id="choose-folder" type="button" class="folder-button">＋ 폴더 선택</button><button id="open-file" type="button" class="folder-button">파일 열기 ↗</button><button id="open-youtube" type="button" class="folder-button" title="유튜브 기타 영상을 타브 악보로 변환">유튜브 ▶</button></div></div>
+    <div id="folder-path" class="folder-path" title="설정된 폴더 없음">폴더를 선택하면 악보 목록이 표시됩니다</div>
+    <div class="library-search"><span aria-hidden="true">⌕</span><input id="library-query" type="search" placeholder="악보 검색" aria-label="악보 검색" /><button id="refresh-folder" type="button" title="폴더 새로고침" aria-label="폴더 새로고침">↻</button></div>
+    <div class="library-count"><span id="file-count">악보 0개</span></div>
+    <div id="library-list" class="library-list"><section id="favorite-section" class="hidden"><div class="library-subheading">★ 즐겨찾기</div><div id="favorite-list"></div></section><div id="folder-groups"></div></div>
+    </div>
+    <div id="settings-panel" class="sidebar-pane settings-panel hidden" role="tabpanel" aria-labelledby="tab-settings"><div class="settings-content">
+      <label>표시할 파트 <select id="track-select" aria-label="표시할 파트"><option value="all">전체 파트</option></select></label>
+      <label>악보 크기 <select id="zoom-select" aria-label="악보 크기"><option value="0.7">70%</option><option value="0.85">85%</option><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select></label>
+      <label>한 줄의 마디 수 <select id="bars-select" aria-label="한 줄의 마디 수"><option value="4">4마디</option><option value="3">3마디</option><option value="2">2마디</option><option value="-1">자동</option></select></label>
+      <label>문자 인코딩 <select id="encoding-select" aria-label="문자 인코딩"><option value="utf-8">UTF-8</option><option value="windows-949">한국어 (CP949)</option></select></label>
+      <div class="settings-group-title">기타 타브 편곡</div>
+      <label>키 조정 <select id="arrange-key" aria-label="편곡 키 조정"><option value="auto">기타로 치기 쉬운 키로 자동 조정</option><option value="original">원래 키 유지 (필요하면 카포)</option></select></label>
+      <label>최대 손 벌림 <select id="arrange-span" aria-label="최대 손 벌림"><option value="4">4칸 (편하게)</option><option value="5">5칸 (조금 넓게)</option></select></label>
+      <label>반주 <select id="arrange-accompaniment" aria-label="반주 포함 범위"><option value="full">멜로디 + 반주</option><option value="bass">멜로디 + 베이스만</option><option value="none">멜로디만</option></select></label>
+      <p id="arrange-summary" class="arrange-summary"></p>
+      <label>악보 제목 수정 <input id="title-edit" type="text" placeholder="열린 악보 없음" /></label>
+      <button id="apply-title" class="settings-button" type="button">제목 적용</button><button id="save-edited" class="settings-button" type="button">수정본 저장 (.gp)</button>
+      <label>개인 메모 <textarea id="score-note" rows="2" placeholder="이 악보의 연습 메모"></textarea></label>
+      <p>한글 파트명이 깨지면 한국어 (CP949)를 선택하세요.</p>
+    </div></div>
+    <div id="tuner-panel" class="sidebar-pane settings-panel hidden" role="tabpanel" aria-labelledby="tab-tuner"><div class="tuner-content"><label class="microphone-picker">마이크 <select id="microphone-select" aria-label="마이크 선택"><option value="">기본 마이크</option></select></label><div id="tuner-targets" class="tuner-targets">악보를 열어 주세요.</div><div class="tuner-reading"><strong id="tuner-note"></strong><span id="tuner-hz"></span><span id="tuner-cents"></span></div><div class="tuner-meter"><span id="tuner-needle"></span></div><button id="tuner-toggle" type="button" class="tuner-button" disabled>마이크 켜기</button></div></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="top-left"><button id="sidebar-toggle" class="top-icon" type="button" aria-label="사이드바 열기 또는 닫기">☰</button><button id="top-home" type="button" class="home-link">⌂ 홈</button><span class="top-divider">/</span><span id="breadcrumb-title">내 악보</span></div>
+      <div id="player-panel" class="toolbar-player hidden">
+        <button id="performance-button" type="button" aria-expanded="false" aria-controls="performance-popup">연주 설정</button>
+        <div id="performance-popup" class="performance-popup hidden" role="group" aria-label="연주 설정">
+          <label>카포 <select id="performance-capo" aria-label="카포 위치"><option value="auto">자동 (치기 쉬운 위치)</option></select></label>
+          <label>재생 속도 <select id="performance-speed" aria-label="재생 속도"><option value="0.5">50%</option><option value="0.75">75%</option><option value="0.85">85%</option><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select></label>
+          <label class="performance-check"><input id="performance-metronome" type="checkbox" /> ♩ 박자 켜기</label>
+          <label class="performance-check"><input id="performance-unfold" type="checkbox" /> 도돌이표 풀어보기</label>
+          <button id="performance-reset" type="button">초기화</button>
+        </div>
+        <button id="stop-button" type="button" aria-label="처음으로" title="처음으로" disabled>■</button>
+        <button id="play-button" type="button" aria-label="재생" title="재생" disabled>▶</button>
+        <button id="pdf-convert" class="pdf-convert hidden" type="button"><span class="pdf-convert-fill"></span><span class="pdf-convert-label">타브악보로 변환</span></button>
+        <button id="pdf-toggle" class="pdf-view-button hidden" type="button" aria-pressed="false" title="원본 PDF와 타브악보 전환">PDF ⇄ 타브</button>
+        <button id="loop-button" type="button" aria-pressed="false" title="악보를 드래그하면 자동으로 구간 반복">↻ 반복</button>
+        <button id="tab-button" type="button" aria-pressed="false" title="피아노·일반 악보를 멜로디 위주의 기타 타브와 코드로 편곡">기타 타브</button>
+      </div>
+    </header>
+    <input id="file-input" class="visually-hidden" type="file" accept=".gp,.gp3,.gp4,.gp5,.gpx,.gp7,.gp8,.musicxml,.xml,.mxl,.pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp" />
+    <div id="empty-view" class="empty-view"><div class="welcome-art">♬</div><div class="eyebrow">YOUR PRACTICE SPACE</div><h1>악보에 집중할 시간.</h1><p>왼쪽에서 악보를 고르거나 파일을 열어 연습을 시작하세요.</p><div class="home-actions"><button id="empty-open" class="primary-button" type="button">악보 파일 열기 ↗</button><button id="empty-youtube" class="primary-button youtube-button" type="button">유튜브 링크로 타브 만들기 ▶</button></div><button id="empty-folder" class="text-button" type="button">악보 폴더 선택하기</button><button id="manage-library" class="text-button" type="button">⚙ 즐겨찾기 · 목록 관리</button><section id="home-recent" class="home-recent hidden"><div class="home-recent-title">최근 재생한 악보</div><div id="home-recent-list" class="home-recent-list"></div></section></div>
+    <div id="viewer" class="viewer hidden"><div class="sheet-card"><div id="sheet-scroll" class="sheet-scroll"><div id="loading" class="loading">악보를 불러오는 중...</div><div id="score-render"></div><div id="source-preview" class="source-preview hidden"></div></div></div></div>
+    <div id="toast" class="toast hidden" role="alert"></div>
+    <div id="busy" class="busy hidden" role="status"><span class="busy-spinner" aria-hidden="true"></span><span id="busy-text"></span></div>
+    <dialog id="omr-dialog" class="rename-dialog"><h2>PDF·이미지 악보 인식</h2><p id="omr-error"></p><p>자동 설치에 실패했습니다. 네트워크 연결을 확인해 다시 열거나, 직접 설치한 Audiveris.exe를 지정할 수 있습니다.</p><div class="dialog-actions"><button id="omr-close" type="button">닫기</button><button id="omr-download" type="button">다운로드 페이지 열기</button><button id="omr-locate" type="button">Audiveris.exe 지정</button></div></dialog>
+    <dialog id="youtube-dialog" class="rename-dialog"><form id="youtube-form"><h2>유튜브 링크로 타브 만들기</h2><p>기타 소리만 나오는 영상일수록 정확합니다. 영상의 소리를 받아 이 컴퓨터에서 음과 박자를 인식한 뒤, 운지를 고른 기타 타브로 보여 줍니다. 자동 인식이라 틀린 음이나 박자가 있을 수 있습니다.</p><label>영상 링크 <input id="youtube-url" type="url" placeholder="https://www.youtube.com/watch?v=..." required /></label><div class="dialog-actions"><button id="youtube-cancel" type="button">취소</button><button type="submit">타브 만들기</button></div></form></dialog>
+    <dialog id="rename-dialog" class="rename-dialog"><form method="dialog"><h2>악보 파일 이름 바꾸기</h2><p>악보 내용의 제목은 바뀌지 않습니다.</p><label>새 파일 이름 <input id="rename-input" type="text" required /></label><div class="dialog-actions"><button value="cancel" type="submit">취소</button><button id="rename-save" type="button">이름 바꾸기</button></div></form></dialog>
+    <div id="library-menu" class="library-menu hidden" role="menu"><button id="favorite-action" type="button" role="menuitem">★ 즐겨찾기</button><button id="rename-action" type="button" role="menuitem">✎ 악보 이름 바꾸기</button><button id="remove-action" type="button" role="menuitem">목록에서 제거</button></div>
+    <dialog id="library-dialog" class="rename-dialog library-dialog"><h2>악보 목록 관리</h2><p>목록에서 제거해도 원본 악보 파일은 삭제되지 않습니다.</p><div class="manager-columns"><section><h3>★ 즐겨찾기</h3><div id="manager-favorites"></div></section><section><h3>목록에서 제거한 악보</h3><div id="manager-removed"></div></section></div><div class="dialog-actions"><button id="library-close" type="button">닫기</button></div></dialog>
+  </main>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

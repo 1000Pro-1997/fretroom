@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- fretroom: a guitar pick carrying a fretboard (strings and frets), in the app's sidebar colours. -->
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#172a25"/>
+  <path d="M128 222C100 196 52 140 48 96 44 58 84 38 128 38s84 20 80 58c-4 44-52 100-80 126z" fill="#c2e98c"/>
+  <g stroke="#1b3b2c" stroke-linecap="round">
+    <path d="M78 92h100M84 128h88M100 164h56" stroke-width="9"/>
+    <path d="M100 66v104M128 62v132M156 66v104" stroke-width="6" opacity=".75"/>
+  </g>
+  <circle cx="128" cy="110" r="11" fill="#1b3b2c"/>
+</svg>

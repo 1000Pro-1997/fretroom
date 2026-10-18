@@ -1,0 +1,94 @@
+diff --git a/node_modules/@coderline/alphatab/dist/alphaTab.core.mjs b/node_modules/@coderline/alphatab/dist/alphaTab.core.mjs
+index b6203da..6ac0bc8 100644
+--- a/node_modules/@coderline/alphatab/dist/alphaTab.core.mjs
++++ b/node_modules/@coderline/alphatab/dist/alphaTab.core.mjs
+@@ -39100,6 +39100,8 @@ class TinySoundFont {
+ 		const voicePlayIndex = this._voicePlayIndex++;
+ 		for (const region of this.presets[presetIndex].regions) {
+ 			if (key < region.loKey || key > region.hiKey || midiVelocity < region.loVel || midiVelocity > region.hiVel) continue;
++			// Unsupported (e.g. stereo-linked) or unloaded samples are empty; playing them produces NaN audio that silences the mix.
++			if (region.samples.length === 0) continue;
+ 			let voice = null;
+ 			if (region.group !== 0) {
+ 				for (const v of this._voices) if (v.playingPreset === presetIndex && v.region.group === region.group) v.endQuick(this.outSampleRate);
+@@ -39704,7 +39706,8 @@ class TinySoundFont {
+ 									if (!(isPercussion && TinySoundFont._setContainsRange(percussionKeys, zoneRegion.loKey, zoneRegion.hiKey) || !isPercussion && instrumentPrograms.has(phdr.preset))) {
+ 										Logger.debug("AlphaSynth", `Skipping load of unused sample ${shdr.sampleName} for preset ${phdr.presetName} (bank ${preset.bank} program ${preset.presetNumber})`);
+ 										zoneRegion.samples = new Float32Array(0);
+-									} else if ((shdr.sampleType & 1) !== 0) {
++									} else if ((shdr.sampleType & 7) !== 0) {
++										// Mono (1), right (2) and left (4) samples share the same PCM layout; stereo halves play as separate panned voices.
+ 										Logger.debug("AlphaSynth", `Loading of used sample ${shdr.sampleName} for preset ${phdr.presetName} (bank ${preset.bank} program ${preset.presetNumber})`);
+ 										if ((shdr.sampleType & 16) !== 0) zoneRegion.samples = hydra.decodeSamples(shdr.start, shdr.end, true);
+ 										else {
+@@ -43406,6 +43409,30 @@ class MidiFileGenerator {
+ 		}
+ 		return track.playbackInfo.primaryChannel;
+ 	}
++	// Guitar Pro plays a dead note as the string's own pitch, damped and muffled (RSE DeadNoteInterpreter
++	// with a palm-mute filter), not as a drum hit. A spare channel with GM "Electric Guitar (muted)" gives
++	// that muffled timbre without changing the track's own instrument.
++	_deadNoteChannelFor(track) {
++		if (this._deadNoteChannel !== void 0) return this._deadNoteChannel;
++		const used = new Set([SynthConstants.PercussionChannel]);
++		for (const t of this._score.tracks) {
++			used.add(t.playbackInfo.primaryChannel);
++			used.add(t.playbackInfo.secondaryChannel);
++		}
++		let channel = 0;
++		while (used.has(channel)) channel++;
++		if (channel > 15) channel = track.playbackInfo.primaryChannel;
++		else {
++			this.transpositionPitches.set(channel, this.transpositionPitches.get(track.playbackInfo.primaryChannel) ?? 0);
++			this._handler.addControlChange(track.index, 0, channel, ControllerType.VolumeCoarse, MidiFileGenerator._toChannelShort(track.playbackInfo.volume));
++			this._handler.addControlChange(track.index, 0, channel, ControllerType.PanCoarse, MidiFileGenerator._toChannelShort(track.playbackInfo.balance));
++			this._handler.addControlChange(track.index, 0, channel, ControllerType.ExpressionControllerCoarse, 127);
++			this._addBankChange(track, 0, channel, 0);
++			this._addProgramChange(track, 0, channel, 28);
++		}
++		this._deadNoteChannel = channel;
++		return channel;
++	}
+ 	_generateNote(note, beatStart, beatDuration, tempoOnBeatStart, brushInfo, rasgueadoInfo) {
+ 		const track = note.beat.voice.bar.staff.track;
+ 		const staff = note.beat.voice.bar.staff;
+@@ -43424,6 +43451,12 @@ class MidiFileGenerator {
+ 		const channel = this._determineChannel(track, note);
+ 		let initialBend = 0;
+ 		const noteSoundDuration = Math.max(noteDuration.untilTieOrSlideEnd, noteDuration.letRingEnd);
++		if (note.isDead && !staff.isPercussion) {
++			// A short, muffled pluck of the string's pitch, like Guitar Pro's dead note.
++			const deadChannel = this._deadNoteChannelFor(track);
++			this._handler.addNote(track.index, noteStart, Math.min(noteSoundDuration, MidiUtils.toTicks(Duration.ThirtySecond)), noteKey, velocity, deadChannel);
++			return;
++		}
+ 		if (note.hasBend) initialBend = MidiFileGenerator.getPitchWheel(note.bendPoints[0].value);
+ 		else if (note.beat.hasWhammyBar) initialBend = MidiFileGenerator.getPitchWheel(note.beat.whammyBarPoints[0].value);
+ 		else if (note.isTieDestination || note.slideOrigin && note.slideOrigin.slideOutType === SlideOutType.Legato) initialBend = -1;
+@@ -52712,7 +52745,8 @@ class EffectBandSlot {
+ 	canBeUsed(band) {
+ 		if (!(!this.shared.uniqueEffectId && band.info.canShareBand || band.info.effectId === this.shared.uniqueEffectId)) return false;
+ 		if (!this.shared.firstBeat) return true;
+-		if (this.shared.lastBeat === band.firstBeat) return true;
++		// Different effects on the same beat (e.g. section marker and chord name) would overlap.
++		if (this.shared.lastBeat === band.firstBeat) return this.bands.every((other) => other.lastBeat !== band.firstBeat || other.info.effectId === band.info.effectId);
+ 		if (this.shared.lastBeat.isBefore(band.firstBeat)) return true;
+ 		if (this.shared.lastBeat.isBefore(this.shared.firstBeat)) return true;
+ 		return false;
+@@ -56741,13 +56775,10 @@ class BarLayoutingInfo {
+ 	}
+ 	height = 0;
+ 	paint(_cx, _cy, _canvas) {}
+-	_calculateSpringConstant(spring, duration, minDuration) {
++	_calculateSpringConstant(_spring, duration, minDuration) {
+ 		if (duration <= 0) duration = MidiUtils.toTicks(Duration.TwoHundredFiftySixth);
+-		if (spring.smallestDuration === 0) spring.smallestDuration = duration;
+-		const smallestDuration = spring.smallestDuration;
+-		const minDurationWidth = BarLayoutingInfo._defaultMinDurationWidth;
+-		const phi = 1 + .85 * Math.log2(duration / minDuration);
+-		return smallestDuration / duration * (1 / (phi * minDurationWidth));
++		// Time-proportional spacing: every elapsed MIDI tick receives the same horizontal width.
++		return minDuration / (duration * BarLayoutingInfo._defaultMinDurationWidth);
+ 	}
+ 	spaceToForce(space) {
+ 		if (this.totalSpringConstant !== -1) {
