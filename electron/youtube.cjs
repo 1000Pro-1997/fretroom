@@ -10,6 +10,8 @@ const ytDlpUrl = process.platform === 'darwin'
   ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos'
   : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe';
 const maxSeconds = 15 * 60;
+const TITLE_TAG = 'fretroom-title:';
+const FILE_TAG = 'fretroom-file:';
 
 const binFolder = () => path.join(app.getPath('userData'), 'bin');
 const audioFolder = () => path.join(app.getPath('userData'), 'youtube-audio');
@@ -83,6 +85,8 @@ function run(executable, args, onLine) {
 async function cached(id) {
   try {
     const meta = JSON.parse(await fs.readFile(path.join(audioFolder(), `${id}.json`), 'utf8'));
+    // Older versions stored the id when a title started with "["; download again for the real title.
+    if (!meta.title || meta.title === id) return null;
     return { id, title: meta.title, bytes: await fs.readFile(path.join(audioFolder(), meta.file)) };
   } catch {
     return null;
@@ -96,17 +100,18 @@ async function download(executable, id, work, progress) {
     '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',
     '--match-filter', `duration <= ${maxSeconds}`,
     '-o', path.join(work, `${id}.%(ext)s`),
-    '--print', '%(title)s', '--print', 'after_move:filepath', '--no-simulate',
+    // Tagged lines: titles may start with "[" like yt-dlp's own progress lines.
+    '--print', `${TITLE_TAG}%(title)s`, '--print', `after_move:${FILE_TAG}%(filepath)s`, '--no-simulate',
     '--', `https://www.youtube.com/watch?v=${id}`,
   ];
   const { code, lines } = await run(executable, args, (line) => {
     const percent = /^\[download\]\s+([\d.]+)%/.exec(line);
     if (percent) progress('download', Number(percent[1]) / 100);
   });
-  const printed = lines.filter((line) => line && !line.startsWith('['));
-  const file = printed.at(-1);
+  const tagged = (tag) => lines.findLast((line) => line.startsWith(tag))?.slice(tag.length);
+  const file = tagged(FILE_TAG);
   if (code === 0 && file && path.dirname(path.resolve(file)) === path.resolve(work)) {
-    return { title: printed.length > 1 ? printed[0] : id, file };
+    return { title: tagged(TITLE_TAG) || id, file };
   }
   if (lines.some((line) => /does not pass filter/.test(line))) throw new Error('15분 이하의 영상만 변환할 수 있습니다.');
   const error = lines.filter((line) => line.startsWith('ERROR')).at(-1);

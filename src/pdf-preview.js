@@ -1,7 +1,18 @@
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/build/pdf.mjs';
+import { getDocument, GlobalWorkerOptions, OPS } from 'pdfjs-dist/build/pdf.mjs';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { readPdfTab } from './pdf-tab.js';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
+
+// Tablature exported as vector graphics (Guitar Pro, MuseScore…) is read exactly, without recognition.
+export async function readVectorTab(bytes) {
+  const loadingTask = getDocument({ data: bytes instanceof Uint8Array ? bytes.slice() : new Uint8Array(bytes).slice() });
+  try {
+    return await readPdfTab(await loadingTask.promise, OPS);
+  } finally {
+    await loadingTask.destroy();
+  }
+}
 
 export function createPdfPreview(container, scroll) {
   let loadingTask;

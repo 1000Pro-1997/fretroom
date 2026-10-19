@@ -9,6 +9,33 @@ const MODEL_SAMPLE_RATE = 22050;
 const LOWEST_GUITAR = 36;
 const HIGHEST_GUITAR = 88;
 const MAX_SECONDS = 15 * 60;
+// Plucked strings ring on, and Basic Pitch re-reads that sustain as new notes: the same pitch
+// again, an octave below, or an overtone of a louder note sounding with it. Such a note needs a
+// clear onset of its own; a fresh note keeps the normal threshold.
+const ARTIFACT_ONSET = 0.7;
+const STILL_RINGING_FRAMES = 3;
+const OVERTONES = [12, 19, 24];
+
+function suppressArtifacts(events, onsets) {
+  const onsetPeak = (event) => {
+    let peak = 0;
+    for (let f = event.startFrame - 2; f <= event.startFrame + 2; f++) if (onsets[f]) peak = Math.max(peak, onsets[f][event.pitchMidi - 21]);
+    return peak;
+  };
+  const end = (event) => event.startFrame + event.durationFrames;
+  const sorted = [...events].sort((a, b) => a.startFrame - b.startFrame).map((event) => ({ ...event, peak: onsetPeak(event) }));
+  const shadowed = (event) => sorted.some((other) => other !== event && other.amplitude >= event.amplitude
+    && other.startFrame <= event.startFrame + 2 && end(other) + STILL_RINGING_FRAMES >= event.startFrame
+    && (OVERTONES.includes(event.pitchMidi - other.pitchMidi) || other.pitchMidi - event.pitchMidi === 12));
+  const kept = [];
+  for (const event of sorted) {
+    if (event.peak >= ARTIFACT_ONSET) { kept.push(event); continue; }
+    const ringing = kept.findLast((other) => other.pitchMidi === event.pitchMidi && end(other) + STILL_RINGING_FRAMES >= event.startFrame);
+    if (ringing) ringing.durationFrames = Math.max(ringing.durationFrames, end(event) - ringing.startFrame);
+    else if (!shadowed(event)) kept.push(event);
+  }
+  return kept;
+}
 
 let modelPromise = null;
 
@@ -34,7 +61,7 @@ export async function detectNotes(audio, onProgress = () => {}) {
   const onsets = [];
   const contours = [];
   await basicPitch.evaluateModel(audio, (f, o, c) => { frames.push(...f); onsets.push(...o); contours.push(...c); }, onProgress);
-  const events = outputToNotesPoly(frames, onsets, 0.5, 0.3, 6, true, null, null, true, 11);
+  const events = suppressArtifacts(outputToNotesPoly(frames, onsets, 0.5, 0.3, 6, true, null, null, true, 11), onsets);
   return noteFramesToTime(addPitchBendsToNoteEvents(contours, events))
     .filter((note) => note.pitchMidi >= LOWEST_GUITAR && note.pitchMidi <= HIGHEST_GUITAR && note.amplitude >= 0.2)
     .sort((a, b) => a.startTimeSeconds - b.startTimeSeconds || a.pitchMidi - b.pitchMidi);

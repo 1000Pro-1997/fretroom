@@ -43,11 +43,39 @@ function estimatePeriod(envelope) {
   return best.lag;
 }
 
-// Ellis (2007) dynamic-programming beat tracker.
+// Normalized autocorrelation, peak within ±4 % of the lag (tempo drifts).
+function periodicity(envelope, lag) {
+  let energy = 0;
+  for (const value of envelope) energy += value * value;
+  if (!energy) return 0;
+  let best = 0;
+  for (let l = Math.round(lag * 0.96); l <= Math.round(lag * 1.04); l++) {
+    let sum = 0;
+    for (let i = l; i < envelope.length; i++) sum += envelope[i] * envelope[i - l];
+    best = Math.max(best, sum / energy);
+  }
+  return best;
+}
+
+// Fingerstyle keeps an even eighth-note flow that autocorrelates more strongly than the beat.
+// The thumb plays on beats, so when the bass repeats at twice the period at least as strongly,
+// the slower pulse is the beat.
+function choosePeriod(envelope, bassEnvelope) {
+  const period = estimatePeriod(envelope);
+  const double = period * 2;
+  if (double > ENVELOPE_RATE * 60 / 50) return period;
+  const atPeriod = periodicity(bassEnvelope, period);
+  const atDouble = periodicity(bassEnvelope, double);
+  return atDouble > 0.02 && atDouble >= atPeriod ? double : period;
+}
+
+// Ellis (2007) dynamic-programming beat tracker. Live fingerstyle playing speeds up and holds
+// back, so the tempo is allowed to flex; each beat then moves to the strongest onset within a
+// tenth of a beat (both measured against a reference tab of a cover recording).
 function trackBeats(envelope, period) {
   const score = new Float32Array(envelope.length);
   const back = new Int32Array(envelope.length).fill(-1);
-  const tightness = 100;
+  const tightness = 10;
   for (let t = 0; t < envelope.length; t++) {
     let best = 0;
     let from = -1;
@@ -61,9 +89,14 @@ function trackBeats(envelope, period) {
   }
   let end = envelope.length - 1;
   for (let t = Math.max(0, envelope.length - period); t < envelope.length; t++) if (score[t] > score[end]) end = t;
-  const beats = [];
-  for (let t = end; t >= 0; t = back[t]) beats.push(t / ENVELOPE_RATE);
-  return beats.reverse();
+  const frames = [];
+  for (let t = end; t >= 0; t = back[t]) frames.push(t);
+  const reach = Math.round(period * 0.1);
+  return frames.reverse().map((frame) => {
+    let best = frame;
+    for (let f = frame - reach; f <= frame + reach; f++) if (f >= 0 && f < envelope.length && envelope[f] > envelope[best]) best = f;
+    return best / ENVELOPE_RATE;
+  });
 }
 
 function estimateKey(notes) {
@@ -158,7 +191,8 @@ export function notesToMusicXml(notes, title) {
   if (notes.length < 8) throw new Error('기타 음을 충분히 찾지 못했습니다. 기타 소리만 나오는 영상인지 확인해 주세요.');
   const last = Math.max(...notes.map((note) => note.startTimeSeconds + note.durationSeconds));
   const envelope = onsetEnvelope(notes, Math.ceil(last * ENVELOPE_RATE) + ENVELOPE_RATE);
-  const period = estimatePeriod(envelope);
+  const bassEnvelope = onsetEnvelope(notes.filter((note) => note.pitchMidi < BASS_BELOW), envelope.length);
+  const period = choosePeriod(envelope, bassEnvelope);
   const beats = trackBeats(envelope, period);
   const step = period / ENVELOPE_RATE;
   while (beats[0] > notes[0].startTimeSeconds - step / 8) beats.unshift(beats[0] - step);

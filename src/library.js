@@ -8,14 +8,18 @@ function storedMarks(key) {
 }
 
 // Paths, rather than recent-list positions or display names, identify scores across folder changes.
-const keyFor = (filename) => filename.replaceAll('/', '\\').toLocaleLowerCase();
-const filenameIn = (folder, name) => `${folder}${folder.endsWith('\\') || folder.endsWith('/') ? '' : '\\'}${name}`;
+export const keyFor = (filename) => filename.replaceAll('/', '\\').toLocaleLowerCase();
+// Windows folders use backslashes; macOS and Linux folders use slashes.
+const filenameIn = (folder, name) => {
+  if (folder.endsWith('\\') || folder.endsWith('/')) return `${folder}${name}`;
+  return `${folder}${folder.includes('\\') && !folder.includes('/') ? '\\' : '/'}${name}`;
+};
 const folderOf = (filename) => filename.replace(/[\\/][^\\/]*$/, '');
 const folderName = (folder) => folder.split(/[\\/]/).filter(Boolean).at(-1) || folder;
 const byName = (a, b) => a.name.localeCompare(b.name, 'ko');
 const HOME_RECENT_LIMIT = 10;
 
-export function createLibraryUI({ openRecent, openFolder, tuneRecent, tuneFolder, rename, selection }) {
+export function createLibraryUI({ openRecent, openFolder, tuneRecent, tuneFolder, rename, selection, hasConversion, forgetConversion, showInFolder }) {
   const favorites = storedMarks('fretroom:favorite-scores');
   const removed = storedMarks('fretroom:removed-scores');
   const collapsed = storedMarks('fretroom:collapsed-folders');
@@ -38,15 +42,25 @@ export function createLibraryUI({ openRecent, openFolder, tuneRecent, tuneFolder
     renderManager();
   }
   function closeMenu() { $('#library-menu').classList.add('hidden'); }
+  function placeMenu(menu, x, y) {
+    menu.style.left = `${Math.min(x, window.innerWidth - menu.offsetWidth - 8)}px`;
+    menu.style.top = `${Math.min(y, window.innerHeight - menu.offsetHeight - 8)}px`;
+  }
   function showMenu(event, filename) {
     event.preventDefault();
     contextPath = filename;
     const menu = $('#library-menu');
     $('#favorite-action').textContent = favorites[keyFor(filename)] ? '☆ 즐겨찾기 해제' : '★ 즐겨찾기';
+    $('#forget-conversion-action').classList.add('hidden');
     menu.classList.remove('hidden');
-    menu.style.left = `${Math.min(event.clientX, window.innerWidth - menu.offsetWidth - 8)}px`;
-    menu.style.top = `${Math.min(event.clientY, window.innerHeight - menu.offsetHeight - 8)}px`;
+    placeMenu(menu, event.clientX, event.clientY);
     $('#favorite-action').focus();
+    // "Delete tab conversion" only appears for a PDF/image that has one.
+    void hasConversion(filename).then((has) => {
+      if (!has || contextPath !== filename || menu.classList.contains('hidden')) return;
+      $('#forget-conversion-action').classList.remove('hidden');
+      placeMenu(menu, event.clientX, event.clientY);
+    });
   }
   function makeRow(entry, { tuning = false } = {}) {
     const { name, path, id } = entry;
@@ -206,6 +220,15 @@ export function createLibraryUI({ openRecent, openFolder, tuneRecent, tuneFolder
   });
   $('#remove-action').addEventListener('click', () => {
     setMark(removed, contextPath, true);
+    closeMenu();
+  });
+  $('#reveal-action').classList.toggle('hidden', !showInFolder);
+  $('#reveal-action').addEventListener('click', () => {
+    void showInFolder(contextPath);
+    closeMenu();
+  });
+  $('#forget-conversion-action').addEventListener('click', () => {
+    void forgetConversion(contextPath);
     closeMenu();
   });
   document.addEventListener('pointerdown', (event) => { if (!event.target.closest('#library-menu')) closeMenu(); });

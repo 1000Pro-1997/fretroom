@@ -6,6 +6,7 @@ const { pathToFileURL } = require('node:url');
 const omr = require('./omr.cjs');
 const youtube = require('./youtube.cjs');
 const updater = require('./updater.cjs');
+const { registerFileAssociations } = require('./file-associations.cjs');
 
 const origin = 'fretroom://app';
 const dist = path.join(__dirname, '..', 'dist');
@@ -14,6 +15,8 @@ const scoreExtensions = new Set(['.gp', '.gp3', '.gp4', '.gp5', '.gp7', '.gp8', 
 const folderPreference = () => path.join(app.getPath('userData'), 'selected-folder.json');
 const recentPreference = () => path.join(app.getPath('userData'), 'recent-scores.json');
 let recentWrites = Promise.resolve();
+// Latest file handed over by the OS (Finder/Explorer double-click, Open With, dock drop) until the renderer takes it.
+let openedFile = null;
 
 function withRecentWrite(action) {
   const result = recentWrites.then(action);
@@ -60,6 +63,19 @@ function sameFilePath(first, second) {
   return process.platform === 'win32'
     ? first.toLowerCase() === second.toLowerCase()
     : first === second;
+}
+
+function isScorePath(arg) {
+  return typeof arg === 'string' && !arg.startsWith('-') && scoreExtensions.has(path.extname(arg).toLowerCase());
+}
+
+function receiveOpenedFile(filename) {
+  openedFile = path.resolve(filename);
+  const window = BrowserWindow.getAllWindows()[0];
+  if (!window) return;
+  if (window.isMinimized()) window.restore();
+  window.focus();
+  window.webContents.send('fretroom:file-opened');
 }
 
 // Every opened score is registered so it can be reopened by id; playedAt marks the ones actually played.
@@ -119,6 +135,17 @@ async function ensureScoreFolder(folder) {
   if (!directory.isDirectory() || directory.isSymbolicLink()) {
     throw new Error('The selected folder is no longer a directory');
   }
+}
+
+// A score the library shows: a recent score or a file in the selected folder.
+async function libraryScorePath(filename) {
+  if (typeof filename !== 'string' || !path.isAbsolute(filename) || !scoreExtensions.has(path.extname(filename).toLowerCase())) throw new Error('Invalid score path');
+  const resolved = path.resolve(filename);
+  await recentWrites;
+  if ((await loadRecent()).some((entry) => sameFilePath(entry.path, resolved))) return resolved;
+  const folder = await savedFolder();
+  if (folder && sameFilePath(path.dirname(resolved), path.resolve(folder))) return resolved;
+  throw new Error('Score is not in the library');
 }
 
 async function listScores(folder) {
@@ -251,6 +278,13 @@ function registerLibraryHandlers() {
     return { name, id, bytes: await readScore(filename) };
   });
 
+  ipcMain.handle('fretroom:take-opened-file', async (event) => {
+    trustedFrame(event);
+    const filename = openedFile;
+    openedFile = null;
+    return filename ? rememberScore(filename) : null;
+  });
+
   ipcMain.handle('fretroom:recent-scores', async (event) => {
     trustedFrame(event);
     await recentWrites;
@@ -322,6 +356,22 @@ function registerLibraryHandlers() {
     const movements = await omr.recognize(bytes, name, omrProgress(event));
     return { name, bytes: movements[0], movements: movements.length > 1 ? movements : undefined };
   });
+  ipcMain.handle('fretroom:has-recognition', async (event, filename) => {
+    trustedFrame(event);
+    if (!omr.isRecognizedName(filename)) return false;
+    return omr.hasRecognition(await readScore(await libraryScorePath(filename)));
+  });
+  ipcMain.handle('fretroom:forget-recognition', async (event, filename) => {
+    trustedFrame(event);
+    if (!omr.isRecognizedName(filename)) throw new Error('PDF 또는 이미지 악보만 변환 결과가 있습니다.');
+    await omr.forgetRecognition(await readScore(await libraryScorePath(filename)));
+  });
+  ipcMain.handle('fretroom:show-in-folder', async (event, filename) => {
+    trustedFrame(event);
+    const file = await libraryScorePath(filename);
+    await fs.access(file);
+    shell.showItemInFolder(file);
+  });
   ipcMain.handle('fretroom:locate-audiveris', async (event) => {
     trustedFrame(event);
     const owner = BrowserWindow.fromWebContents(event.sender);
@@ -360,15 +410,26 @@ protocol.registerSchemesAsPrivileged([
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  // Windows passes associated files on the command line, to the first instance or via second-instance.
+  const launchFile = process.argv.slice(1).findLast(isScorePath);
+  if (launchFile) openedFile = path.resolve(launchFile);
+  app.on('second-instance', (_event, argv) => {
+    const file = argv.slice(1).findLast(isScorePath);
+    if (file) return receiveOpenedFile(file);
     const window = BrowserWindow.getAllWindows()[0];
     if (window) {
       if (window.isMinimized()) window.restore();
       window.focus();
     }
   });
+  // macOS delivers associated files as open-file, possibly before the app is ready.
+  app.on('open-file', (event, filename) => {
+    event.preventDefault();
+    receiveOpenedFile(filename);
+  });
 
   app.whenReady().then(() => {
+    registerFileAssociations().catch((error) => console.warn(`Could not register score file types: ${error.message}`));
     registerLibraryHandlers();
     protocol.handle('fretroom', (request) => {
       const url = new URL(request.url);
@@ -385,7 +446,8 @@ if (!app.requestSingleInstanceLock()) {
     });
 
     const window = new BrowserWindow({
-      icon: path.join(__dirname, '..', 'build', 'icon.ico'),
+      // macOS takes the app icon from the bundle's .icns and cannot load .ico.
+      ...(process.platform === 'win32' && { icon: path.join(__dirname, '..', 'build', 'icon.ico') }),
       width: 1300,
       height: 850,
       minWidth: 750,
@@ -398,6 +460,9 @@ if (!app.requestSingleInstanceLock()) {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
+        // Transcription (TensorFlow.js waits on animation frames) and playback must keep running
+        // while the window is behind other apps.
+        backgroundThrottling: false,
       },
     });
     window.webContents.session.setPermissionRequestHandler((contents, permission, callback, details) => {

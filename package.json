@@ -10,11 +10,16 @@
     "preview": "vite preview --host 127.0.0.1",
     "desktop": "npm run build && electron .",
     "package:win": "npm run build && node scripts/package-win.cjs",
+    "package:mac": "npm run build && node scripts/package-mac.cjs",
     "postinstall": "patch-package && node scripts/fetch-soundfont.cjs"
   },
   "build": {
     "appId": "kr.fretroom.viewer",
     "productName": "fretroom",
+    "fileAssociations": [
+      { "ext": ["gp", "gp3", "gp4", "gp5", "gpx", "gp7", "gp8"], "name": "Guitar Pro Score", "role": "Viewer" },
+      { "ext": ["musicxml", "mxl"], "name": "MusicXML Score", "role": "Viewer" }
+    ],
     "directories": {
       "output": "release"
     },

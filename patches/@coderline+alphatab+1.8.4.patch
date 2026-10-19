@@ -1,8 +1,8 @@
 diff --git a/node_modules/@coderline/alphatab/dist/alphaTab.core.mjs b/node_modules/@coderline/alphatab/dist/alphaTab.core.mjs
-index b6203da..6ac0bc8 100644
+index 0000000..0000000 100644
 --- a/node_modules/@coderline/alphatab/dist/alphaTab.core.mjs
 +++ b/node_modules/@coderline/alphatab/dist/alphaTab.core.mjs
-@@ -39100,6 +39100,8 @@ class TinySoundFont {
+@@ -39100,6 +39100,8 @@
  		const voicePlayIndex = this._voicePlayIndex++;
  		for (const region of this.presets[presetIndex].regions) {
  			if (key < region.loKey || key > region.hiKey || midiVelocity < region.loVel || midiVelocity > region.hiVel) continue;
@@ -11,7 +11,7 @@ index b6203da..6ac0bc8 100644
  			let voice = null;
  			if (region.group !== 0) {
  				for (const v of this._voices) if (v.playingPreset === presetIndex && v.region.group === region.group) v.endQuick(this.outSampleRate);
-@@ -39704,7 +39706,8 @@ class TinySoundFont {
+@@ -39704,7 +39706,8 @@
  									if (!(isPercussion && TinySoundFont._setContainsRange(percussionKeys, zoneRegion.loKey, zoneRegion.hiKey) || !isPercussion && instrumentPrograms.has(phdr.preset))) {
  										Logger.debug("AlphaSynth", `Skipping load of unused sample ${shdr.sampleName} for preset ${phdr.presetName} (bank ${preset.bank} program ${preset.presetNumber})`);
  										zoneRegion.samples = new Float32Array(0);
@@ -21,7 +21,7 @@ index b6203da..6ac0bc8 100644
  										Logger.debug("AlphaSynth", `Loading of used sample ${shdr.sampleName} for preset ${phdr.presetName} (bank ${preset.bank} program ${preset.presetNumber})`);
  										if ((shdr.sampleType & 16) !== 0) zoneRegion.samples = hydra.decodeSamples(shdr.start, shdr.end, true);
  										else {
-@@ -43406,6 +43409,30 @@ class MidiFileGenerator {
+@@ -43406,6 +43409,30 @@
  		}
  		return track.playbackInfo.primaryChannel;
  	}
@@ -52,7 +52,7 @@ index b6203da..6ac0bc8 100644
  	_generateNote(note, beatStart, beatDuration, tempoOnBeatStart, brushInfo, rasgueadoInfo) {
  		const track = note.beat.voice.bar.staff.track;
  		const staff = note.beat.voice.bar.staff;
-@@ -43424,6 +43451,12 @@ class MidiFileGenerator {
+@@ -43424,6 +43451,12 @@
  		const channel = this._determineChannel(track, note);
  		let initialBend = 0;
  		const noteSoundDuration = Math.max(noteDuration.untilTieOrSlideEnd, noteDuration.letRingEnd);
@@ -65,7 +65,32 @@ index b6203da..6ac0bc8 100644
  		if (note.hasBend) initialBend = MidiFileGenerator.getPitchWheel(note.bendPoints[0].value);
  		else if (note.beat.hasWhammyBar) initialBend = MidiFileGenerator.getPitchWheel(note.beat.whammyBarPoints[0].value);
  		else if (note.isTieDestination || note.slideOrigin && note.slideOrigin.slideOutType === SlideOutType.Legato) initialBend = -1;
-@@ -52712,7 +52745,8 @@ class EffectBandSlot {
+@@ -44223,12 +44256,19 @@
+ 		if (beat.brushType) {
+ 			let stringUsed = 0;
+ 			let stringCount = 0;
+-			for (const n of beat.notes) {
+-				if (n.isTieDestination) continue;
+-				stringUsed |= 1 << n.string - 1;
+-				stringCount++;
++			let brushDuration = beat.brushDuration;
++			// fretroom: a chord split over voices (e.g. its bass in voice 2) is rolled as one chord.
++			for (const voice of beat.voice.bar.voices) {
++				const part = voice === beat.voice ? beat : voice.getBeatAtPlaybackStart(beat.playbackStart);
++				if (!part || part.brushType !== beat.brushType) continue;
++				if (part !== beat) brushDuration = Math.min(brushDuration, part.brushDuration);
++				for (const n of part.notes) {
++					if (n.isTieDestination || (stringUsed & 1 << n.string - 1) !== 0) continue;
++					stringUsed |= 1 << n.string - 1;
++					stringCount++;
++				}
+ 			}
+-			this._fillBrushInfo(beat, brushInfo, beat.brushType === BrushType.ArpeggioDown || beat.brushType === BrushType.BrushDown, stringUsed, stringCount, beat.brushDuration);
++			this._fillBrushInfo(beat, brushInfo, beat.brushType === BrushType.ArpeggioDown || beat.brushType === BrushType.BrushDown, stringUsed, stringCount, brushDuration);
+ 		}
+ 		return brushInfo;
+ 	}
+@@ -52712,7 +52752,8 @@
  	canBeUsed(band) {
  		if (!(!this.shared.uniqueEffectId && band.info.canShareBand || band.info.effectId === this.shared.uniqueEffectId)) return false;
  		if (!this.shared.firstBeat) return true;
@@ -75,7 +100,7 @@ index b6203da..6ac0bc8 100644
  		if (this.shared.lastBeat.isBefore(band.firstBeat)) return true;
  		if (this.shared.lastBeat.isBefore(this.shared.firstBeat)) return true;
  		return false;
-@@ -56741,13 +56775,10 @@ class BarLayoutingInfo {
+@@ -56741,13 +56782,10 @@
  	}
  	height = 0;
  	paint(_cx, _cy, _canvas) {}

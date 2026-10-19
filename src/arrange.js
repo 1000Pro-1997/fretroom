@@ -486,7 +486,8 @@ function transitionCost(previous, candidate, tick, maxSpan) {
 function solve(timeline, transpose, options, limitTick = Infinity) {
   const guitar = options.guitar;
   const slots = timeline.allSlots.filter((slot) => slot.start < limitTick);
-  const melodyOctave = chooseMelodyOctave(slots, transpose, guitar);
+  // A recording sounds in the octave it was played; only notes the guitar cannot reach fold.
+  const melodyOctave = options.recording ? { shift: 0 } : chooseMelodyOctave(slots, transpose, guitar);
   const pitchOf = (slot) => (slot.role === 'melody'
     ? foldMelody(slot.pitch + transpose + melodyOctave.shift, guitar)
     : slot.pitch + transpose);
@@ -572,22 +573,28 @@ function solve(timeline, transpose, options, limitTick = Infinity) {
 
 // A placement is a tuning, a capo and a key change. Every tuning/capo keeps
 // the sounding key; auto mode also tries nearby keys in standard tuning.
-// Alternate tunings are only tried for recordings (options.recording), where the
-// player may have retuned; recordings may also move to any key. A fixed
-// options.capo (from 연주 설정) restricts every placement to that capo.
+// Recordings (options.recording) keep the key they were played in, so the tab can be played
+// along with them; easy shapes come from a capo or an alternate tuning the player may have used.
+// A fixed options.capo (from 연주 설정) restricts every placement to that capo.
 function candidatePlacements(timeline, options) {
   const placements = [];
   const fixed = Number.isInteger(options.capo) ? options.capo : null;
-  const capos = fixed === null ? [0, 1, 2, 3, 4, 5] : [fixed];
-  for (const tuning of options.recording ? TUNINGS : [STANDARD]) {
+  const capos = fixed !== null ? [fixed] : options.recording ? [0, 1, 2, 3, 4, 5, 6, 7] : [0, 1, 2, 3, 4, 5];
+  // Every alternate tuning lowers the bottom string, so a recording is only taken as retuned when
+  // notes below the standard low E recur as a bass would (3 % of notes); otherwise standard tuning
+  // plays it as recorded. Sporadic low notes are mostly octave-below detection errors.
+  const struck = timeline.allSlots.filter((slot) => !slot.tieFrom);
+  const belowStandard = struck.filter((slot) => slot.pitch < STANDARD.open[0]).length;
+  const retuned = options.recording && belowStandard >= Math.max(6, struck.length * 0.03);
+  for (const tuning of retuned ? TUNINGS : [STANDARD]) {
     for (const capo of capos) placements.push({ tuning, capo, transpose: -capo, keyChange: 0 });
   }
-  if (options.keyMode === 'auto') {
+  if (options.keyMode === 'auto' && !options.recording) {
     const capo = fixed ?? 0;
     const ranked = [];
     for (let t = -5; t <= 6; t++) ranked.push({ t, cost: chooseMelodyOctave(timeline.allSlots, t, guitarFor(STANDARD)).cost + Math.abs(t) * 0.5 });
     ranked.sort((a, b) => a.cost - b.cost);
-    for (const { t } of options.recording ? ranked : ranked.slice(0, 5)) if (t) placements.push({ tuning: STANDARD, capo, transpose: t - capo, keyChange: t });
+    for (const { t } of ranked.slice(0, 5)) if (t) placements.push({ tuning: STANDARD, capo, transpose: t - capo, keyChange: t });
   }
   return placements;
 }

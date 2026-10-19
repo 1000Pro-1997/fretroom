@@ -1,7 +1,7 @@
 import * as alphaTab from '@coderline/alphatab';
 import { createTuner } from './tuner.js';
 import { unfoldRepeats } from './repeats.js';
-import { createLibraryUI } from './library.js';
+import { createLibraryUI, keyFor } from './library.js';
 import { arrangeForGuitar, hasGuitarTab } from './arrange.js';
 import { joinMovements } from './movements.js';
 import './style.css';
@@ -248,6 +248,9 @@ const libraryUI = createLibraryUI({
   tuneFolder: async (name) => { await openLibraryScore(name); setSidebarTab('tuner'); },
   rename: showRenameDialog,
   selection: () => ({ currentId, activeLibraryName }),
+  hasConversion,
+  forgetConversion,
+  showInFolder: bridge?.showInFolder && ((path) => bridge.showInFolder(path).catch((error) => showToast(`파일 위치를 열 수 없습니다: ${error.message}`))),
 });
 function renderLibrary() { libraryUI.render(); }
 function setLibrary(result) {
@@ -860,14 +863,20 @@ $('#pdf-convert').addEventListener('click', async () => {
   button.style.setProperty('--progress', '3%');
   $('.pdf-convert-label').textContent = '변환중…';
   try {
-    const recognized = await bridge.recognizeScore(source.name, source.bytes);
+    // Vector tablature (exported from notation software) is read exactly and shown as written;
+    // only scanned pages go through optical recognition and the guitar arrangement.
+    const vector = /\.pdf$/i.test(source.name)
+      ? await (await import('./pdf-preview.js')).readVectorTab(source.bytes).catch((error) => { console.warn('Vector tab reading failed; using recognition', error); return null; })
+      : null;
+    const recognized = vector ? null : await bridge.recognizeScore(source.name, source.bytes);
     if (sourcePreview !== source) return;
     button.style.setProperty('--progress', '100%');
     $('.pdf-convert-label').textContent = '변환 완료';
     source.converted = true;
-    (scorePrefs[source.id] ||= {}).guitarTab = true;
+    (scorePrefs[source.id] ||= {}).guitarTab = !vector;
     saveScorePrefs();
-    beginLoad(source.name, payloadBytes(recognized), source.id, source.libraryName, true);
+    beginLoad(source.name, vector ? new TextEncoder().encode(vector.tex) : payloadBytes(recognized), source.id, source.libraryName, true);
+    if (vector?.uncertain.length) showToast(`PDF의 타브를 그대로 옮겼습니다. ${vector.uncertain.slice(0, 5).join(', ')}${vector.uncertain.length > 5 ? ' 등' : ''}마디는 원본과 다를 수 있으니 확인해 주세요.`);
   } catch (error) {
     if (sourcePreview !== source) return;
     source.converted = false;
@@ -877,6 +886,33 @@ $('#pdf-convert').addEventListener('click', async () => {
     if (sourcePreview === source) resetConversion();
   }
 });
+// The PDF/image open now, if it is the given library file.
+function openSourceAt(path) {
+  const source = sourcePreview;
+  return source && recent.some((entry) => entry.id === source.id && keyFor(entry.path) === keyFor(path)) ? source : null;
+}
+// A conversion exists when the file is open and converted, or when its recognition was saved.
+async function hasConversion(path) {
+  if (!bridge?.hasRecognition || !recognizedExtension.test(path)) return false;
+  if (openSourceAt(path)?.converted) return true;
+  return bridge.hasRecognition(path).catch(() => false);
+}
+// Deleting drops the saved recognition, so the next conversion starts from scratch, and puts an
+// open converted copy back to the original so it can be converted again right away.
+async function forgetConversion(path) {
+  try {
+    await bridge.forgetRecognition(path);
+  } catch (error) {
+    showToast(`타브 변환을 삭제할 수 없습니다: ${error.message}`);
+    return;
+  }
+  const source = openSourceAt(path);
+  if (source?.converted && !convertingSource) {
+    source.converted = false;
+    await showSourcePreview(source);
+  }
+  showToast('타브 변환을 삭제했습니다. 다시 변환하면 처음부터 변환합니다.');
+}
 $('#pdf-toggle').addEventListener('click', () => {
   if (!sourcePreview?.converted) return;
   if ($('#source-preview').classList.contains('hidden')) {
@@ -978,8 +1014,19 @@ $('#youtube-form').addEventListener('submit', (event) => {
   transcribeYoutube(url);
 });
 
+// Files double-clicked in Finder/Explorer arrive through the main process; they win over the last score.
+let fileHandedOver = false;
+async function openHandedFile() {
+  const recentId = await bridge.takeOpenedFile();
+  if (!recentId) return;
+  fileHandedOver = true;
+  await openRecentScore(recentId);
+}
 if (bridge) {
-  Promise.all([refreshLibrary(), refreshRecent()]).then(() => {
+  bridge.onFileOpened(openHandedFile);
+  Promise.all([refreshLibrary(), refreshRecent()]).then(async () => {
+    await openHandedFile();
+    if (fileHandedOver) return;
     if (prefs.lastRecentId && recent.some(({ id, path }) => id === prefs.lastRecentId && !libraryUI.isRemoved(path))) openRecentScore(prefs.lastRecentId);
   });
 } else renderLibrary();

@@ -3,3 +3,5 @@ dist/
 release/
 public/soundfont/FluidR3_GM.sf2
 public/soundfont/*.download
+build/icon.icns
+build/fretroom.iconset/

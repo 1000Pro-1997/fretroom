@@ -34,21 +34,8 @@ jobs:
           cache: npm
       - name: Install dependencies and score soundfont
         run: npm ci
-      - name: Build web app
-        run: npm run build
-      - name: Create macOS application icon
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p build/fretroom.iconset
-          for size in 16 32 128 256 512; do
-            sips -z "$size" "$size" build/icon.png --out "build/fretroom.iconset/icon_${size}x${size}.png" >/dev/null
-            double=$((size * 2))
-            sips -z "$double" "$double" build/icon.png --out "build/fretroom.iconset/icon_${size}x${size}@2x.png" >/dev/null
-          done
-          iconutil -c icns build/fretroom.iconset -o build/icon.icns
-      - name: Package unsigned macOS app
-        run: npx electron-builder --mac dmg zip --${{ matrix.arch }} --publish never
+      - name: Build and package unsigned macOS app
+        run: npm run package:mac -- ${{ matrix.arch }}
       - name: Save downloadable workflow artifacts
         uses: actions/upload-artifact@v4
         with:
